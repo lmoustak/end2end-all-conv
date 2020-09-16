@@ -82,7 +82,7 @@ def run(train_dir, val_dir, test_dir,
 
     # ============ Train & validation set =============== #
     train_bs = int(batch_size*train_bs_multiplier)
-    if net != 'yaroslav':
+    if net != 'yaroslav' or net != 'custom':
         dup_3_channels = True
     else:
         dup_3_channels = False
