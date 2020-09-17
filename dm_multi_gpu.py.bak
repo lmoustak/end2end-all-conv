@@ -13,13 +13,13 @@ def make_parallel(model, gpu_count):
         return tf.slice(data, start, size)
 
     outputs_all = []
-    for i in range(len(model.outputs)):
+    for i in xrange(len(model.outputs)):
         outputs_all.append([])
 
     #Place a copy of the model on each GPU, each getting a slice of the batch
     # NUM_GPU_DEVICES: number of GPU devices
     # GPUS: list of GPU devices (e.g. "/dev/nvidia2,/dev/nvidia3")
-    for i in range(gpu_count):
+    for i in xrange(gpu_count):
         with tf.device('/gpu:%d' % i):
             with tf.name_scope('tower_%d' % i) as scope:
 
@@ -36,7 +36,7 @@ def make_parallel(model, gpu_count):
                     outputs = [outputs]
                 
                 #Save all the outputs for merging back together later
-                for l in range(len(outputs)):
+                for l in xrange(len(outputs)):
                     outputs_all[l].append(outputs[l])
 
     # merge outputs on CPU

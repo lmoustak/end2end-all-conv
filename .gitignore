@@ -9,3 +9,4 @@ nohup.out
 *.sublime-*
 .ipynb_checkpoints
 *.pyc
+.tmp.drivedownload

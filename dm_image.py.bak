@@ -182,8 +182,8 @@ def sweep_img_patches(img, patch_size, stride, target_scale=None,
     y_gap = int((img.shape[0] - sweep_hei)/2)
     x_gap = int((img.shape[1] - sweep_wid)/2)
     patch_list = []
-    for y in range(y_gap, y_gap + nb_row*stride, stride):
-        for x in range(x_gap, x_gap + nb_col*stride, stride):
+    for y in xrange(y_gap, y_gap + nb_row*stride, stride):
+        for x in xrange(x_gap, x_gap + nb_col*stride, stride):
             patch = img[y:y+patch_size, x:x+patch_size].copy()
             if target_scale is not None:
                 patch_max = patch.max() if patch.max() != 0 else target_scale
@@ -314,13 +314,13 @@ class DMImgListIterator(Iterator):
         nb_pos = np.sum(self.classes == 1)
         nb_neg = np.sum(self.classes == 0)
         if verbose:
-            print(('There are %d cancer cases and %d normal cases.' % (nb_pos, nb_neg)))
+            print('There are %d cancer cases and %d normal cases.' % (nb_pos, nb_neg))
 
         super(DMImgListIterator, self).__init__(
             self.nb_sample, batch_size, shuffle, seed)
 
 
-    def __next__(self):
+    def next(self):
         with self.lock:
             index_array, current_index, current_batch_size = next(self.index_generator)
             classes_ = self.classes[index_array]
@@ -367,7 +367,7 @@ class DMImgListIterator(Iterator):
         
         # optionally save augmented images to disk for debugging purposes
         if self.save_to_dir:
-            for i in range(current_batch_size):
+            for i in xrange(current_batch_size):
                 fname = '{prefix}_{index}_{hash}.{format}'.\
                     format(prefix=self.save_prefix, index=current_index + i,
                            hash=rng.randint(1e4), format=self.save_format)
@@ -443,22 +443,22 @@ class DMExamListIterator(Iterator):
                          for e in exam_list ]
         self.classes = np.array(self.classes)  # (exams, breasts)
         if verbose:
-            print(('For left breasts, normal=%d, cancer=%d, unimaged/masked=%d.' % 
+            print('For left breasts, normal=%d, cancer=%d, unimaged/masked=%d.' % 
                 (np.sum(self.classes[:, 0] == 0), 
                  np.sum(self.classes[:, 0] == 1), 
                  np.sum(np.isnan(self.classes[:, 0])))
-                ))
-            print(('For right breasts, normal=%d, cancer=%d, unimaged/masked=%d.' % 
+                )
+            print('For right breasts, normal=%d, cancer=%d, unimaged/masked=%d.' % 
                 (np.sum(self.classes[:, 1] == 0), 
                  np.sum(self.classes[:, 1] == 1), 
                  np.sum(np.isnan(self.classes[:, 1])))
-                ))
+                )
 
         super(DMExamListIterator, self).__init__(
             self.nb_exam, batch_size, shuffle, seed)
 
 
-    def __next__(self):
+    def next(self):
         with self.lock:
             index_array, current_index, current_batch_size = next(self.index_generator)
             classes_ = np.array([ 1 if p[0] or p[1] else 0 for 
@@ -513,9 +513,9 @@ class DMExamListIterator(Iterator):
                         gs_255=self.gs_255)
             except ValueError:
                 if self.err_counter < 10:
-                    print("Error encountered reading an image dataframe:", end=' ') 
-                    print(img_df, "Use a blank image instead.")
-                    print("Exam caused trouble:", exam)
+                    print "Error encountered reading an image dataframe:", 
+                    print img_df, "Use a blank image instead."
+                    print "Exam caused trouble:", exam
                     self.err_counter += 1
                 img = np.zeros(self.target_size, dtype='float32')
 
@@ -592,7 +592,7 @@ class DMExamListIterator(Iterator):
                 batch_exam.append(exam_idx)
 
         # transform and standardize.
-        for i in range(current_batch_size):
+        for i in xrange(current_batch_size):
             if self.prediction_mode:
                 for ii, img_cc_ in enumerate(batch_x_cc[i]):
                     if not np.all(img_cc_ == 0):
@@ -643,7 +643,7 @@ class DMExamListIterator(Iterator):
                 cv2.imwrite(path.join(self.save_to_dir, fname), img)
 
 
-            for i in range(current_batch_size):
+            for i in xrange(current_batch_size):
                 if not self.prediction_mode:
                     img_cc = batch_x_cc[i]
                     img_mlo = batch_x_mlo[i]
@@ -761,8 +761,8 @@ class DMCandidROIIterator(Iterator):
             nb_pos = np.sum(self.classes == 1)
             nb_neg = np.sum(self.classes == 0)
             if verbose:
-                print(('There are %d cancer cases and %d normal cases.' % \
-                      (nb_pos, nb_neg)))
+                print('There are %d cancer cases and %d normal cases.' % \
+                      (nb_pos, nb_neg))
         else:
             self.classes = None
 
@@ -790,7 +790,7 @@ class DMCandidROIIterator(Iterator):
             self.nb_sample, img_per_batch, shuffle, seed)
 
 
-    def __next__(self):
+    def next(self):
         with self.lock:
             index_array, current_index, current_batch_size = \
                 next(self.index_generator)
@@ -838,8 +838,8 @@ class DMCandidROIIterator(Iterator):
             # blob detection.
             key_pts = self.blob_detector.detect((img/img.max()*255).astype('uint8'))
             if int(self.verbose) > 1:
-                print("%s: blob detection found %d key points." % \
-                    (self.filenames[fi], len(key_pts)))
+                print "%s: blob detection found %d key points." % \
+                    (self.filenames[fi], len(key_pts))
             if len(key_pts) > nb_img_roi:
                 # key_pts = rng.choice(key_pts, self.roi_per_img, replace=False)
                 key_pts = clust_kpts(key_pts, nb_img_roi, self.seed)
@@ -879,7 +879,7 @@ class DMCandidROIIterator(Iterator):
         
         # optionally save augmented images to disk for debugging purposes
         if self.save_to_dir:
-            for i in range(nb_tot_roi):
+            for i in xrange(nb_tot_roi):
                 fname = '{prefix}_{index}_{hash}.{format}'.\
                     format(prefix=self.save_prefix, 
                            index=current_index*nb_img_roi + i,
@@ -1042,7 +1042,7 @@ class DMNumpyArrayIterator(Iterator):
         self.seed = seed
         super(DMNumpyArrayIterator, self).__init__(x.shape[0], batch_size, shuffle, seed)
 
-    def __next__(self):
+    def next(self):
         # for python 2.x.
         # Keeps under lock only the mechanism which advances
         # the indexing of each batch
@@ -1162,7 +1162,7 @@ class DMDirectoryIterator(Iterator):
                 if path.isdir(path.join(directory, subdir)):
                     classes.append(subdir)
         self.nb_class = len(classes)
-        self.class_indices = dict(list(zip(classes, list(range(len(classes))))))
+        self.class_indices = dict(zip(classes, range(len(classes))))
 
         def _recursive_list(subpath):
             return sorted(os.walk(subpath, followlinks=follow_links), key=lambda tpl: tpl[0])
@@ -1178,7 +1178,7 @@ class DMDirectoryIterator(Iterator):
                             break
                     if is_valid:
                         self.nb_sample += 1
-        print(('Found %d images belonging to %d classes.' % (self.nb_sample, self.nb_class)))
+        print('Found %d images belonging to %d classes.' % (self.nb_sample, self.nb_class))
 
         # second, build an index of the images in the different class subfolders
         self.filenames = []
@@ -1201,7 +1201,7 @@ class DMDirectoryIterator(Iterator):
                         self.filenames.append(path.relpath(absolute_path, directory))
         super(DMDirectoryIterator, self).__init__(self.nb_sample, batch_size, shuffle, seed)
 
-    def __next__(self):
+    def next(self):
         with self.lock:
             index_array, current_index, current_batch_size = next(self.index_generator)
         # The transformation of images is not under thread lock so it can be done in parallel
