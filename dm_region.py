@@ -45,10 +45,10 @@ def topK_region_idx(regions, k=1):
 def prob_heatmap_features(phm, cutoff, k=1, nb_cls=3):
     fea_list = []
     if phm is None:  # deal with missing view.
-        for _ in range(nb_cls - 1): # phms depending on the # of cls.
+        for _ in xrange(nb_cls - 1): # phms depending on the # of cls.
             fea = {'nb_regions': np.nan, 'total_area': np.nan, 
                    'global_max_intensity': np.nan}
-            for j in range(k):
+            for j in xrange(k):
                 reg_fea = {
                     'area': np.nan, 'area_ratio': np.nan, 'area_ratio2': np.nan,
                     'eccentricity': np.nan, 'eig1': np.nan, 'eig2': np.nan,
@@ -59,14 +59,14 @@ def prob_heatmap_features(phm, cutoff, k=1, nb_cls=3):
                     'orientation': np.nan, 'perimeter': np.nan,
                     'solidity': np.nan, 
                 }
-                for key in list(reg_fea.keys()):
+                for key in reg_fea.keys():
                     new_key = 'top' + str(j+1) + '_' + key
                     reg_fea[new_key] = reg_fea.pop(key)
                 fea.update(reg_fea)
             fea_list.append(fea)
         return fea_list
     
-    for i in range(1, nb_cls):
+    for i in xrange(1, nb_cls):
         phm_ = phm[:,:,i]
         hm_bin = np.zeros_like(phm_, dtype='uint8')
         hm_bin[phm_ >= cutoff] = 255
@@ -81,13 +81,13 @@ def prob_heatmap_features(phm, cutoff, k=1, nb_cls=3):
         idx = topK_region_idx(props, k)
         for j,x in enumerate(idx):
             reg_fea = region_features(props[x])
-            for key in list(reg_fea.keys()):
+            for key in reg_fea.keys():
                 new_key = 'top' + str(j+1) + '_' + key
                 reg_fea[new_key] = reg_fea.pop(key)
             fea.update(reg_fea)
-        for j in range(nb_reg, k):
+        for j in xrange(nb_reg, k):
             reg_fea = region_features()
-            for key in list(reg_fea.keys()):
+            for key in reg_fea.keys():
                 new_key = 'top' + str(j+1) + '_' + key
                 reg_fea[new_key] = reg_fea.pop(key)
             fea.update(reg_fea)

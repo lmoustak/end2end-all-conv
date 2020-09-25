@@ -6,22 +6,13 @@ import sys
 import numpy as np
 from keras.callbacks import Callback
 from keras.models import load_model, Model
-from keras.layers import (
-    Flatten, Dense, Dropout, Input,
-    GlobalAveragePooling2D, Activation,
-    MaxPooling2D
-)
+from keras.layers import (Flatten, Dense, Dropout, Input,
+                          GlobalAveragePooling2D, Activation, MaxPooling2D)
 from keras.layers.convolutional import Conv2D
 from keras.regularizers import l2
-from keras.optimizers import (
-    SGD, RMSprop, Adagrad, Adadelta,
-    Adam, Adamax, Nadam
-)
-from keras.callbacks import (
-    ReduceLROnPlateau,
-    EarlyStopping,
-    ModelCheckpoint
-)
+from keras.optimizers import (SGD, RMSprop, Adagrad, Adadelta, Adam, Adamax,
+                              Nadam)
+from keras.callbacks import (ReduceLROnPlateau, EarlyStopping, ModelCheckpoint)
 from keras.preprocessing.image import flip_axis
 import keras.backend as K
 data_format = K.image_data_format()
@@ -33,6 +24,9 @@ else:
     CHANNEL_AXIS = 1
     ROW_AXIS = 2
     COL_AXIS = 3
+
+import tensorflow as tf
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 
 def flip_all_img(X):
@@ -67,7 +61,7 @@ def load_dat_ram(generator, nb_samples):
     y_list = []
     w_list = []
     while samples_seen < nb_samples:
-        blob_ = next(generator)
+        blob_ = generator.next()
         try:
             X, y, w = blob_
             w_list.append(w)
@@ -77,12 +71,10 @@ def load_dat_ram(generator, nb_samples):
         y_list.append(y)
         samples_seen += len(y)
     try:
-        data_set = (np.concatenate(X_list),
-                    np.concatenate(y_list),
+        data_set = (np.concatenate(X_list), np.concatenate(y_list),
                     np.concatenate(w_list))
     except ValueError:
-        data_set = (np.concatenate(X_list),
-                    np.concatenate(y_list))
+        data_set = (np.concatenate(X_list), np.concatenate(y_list))
 
     if len(data_set[0]) != nb_samples:
         raise Exception('Load data into RAM error')
@@ -170,15 +162,14 @@ def Yaroslav(input_shape=None, classes=5):
     return model
 
 
-def MyCustomCNN(input_shape=None, classes=5):
+def MyCustomCNN(classes=5):
     """Instantiates a custom CNN for the purposes of a university project.
        May not work well.
     """
-    if input_shape is None:
-        if data_format == 'channels_last':
-            input_shape = (None, None, 1)
-        else:
-            input_shape = (1, None, None)
+    if data_format == 'channels_last':
+        input_shape = tuple([None, None, 1])
+    else:
+        input_shape = tuple([1, None, None])
     img_input = Input(shape=input_shape)
 
     # Block 1
@@ -235,14 +226,23 @@ def MyCustomCNN(input_shape=None, classes=5):
     x = Activation('relu')(x)
     x = MaxPooling2D((2, 2), strides=(2, 2), name='block6_pool')(x)
 
+    # Block 7
+    x = Conv2D(1024, (3, 3), padding='same', name='block7_conv1')(x)
+    x = BatchNormalization(axis=CHANNEL_AXIS)(x)
+    x = Activation('relu')(x)
+    x = Conv2D(1024, (3, 3), padding='same', name='block7_conv2')(x)
+    x = BatchNormalization(axis=CHANNEL_AXIS)(x)
+    x = Activation('relu')(x)
+    x = MaxPooling2D((2, 2), strides=(2, 2), name='block7_pool')(x)
+
     # Classification block
     #x = Flatten(name='flatten')(x)
-    #x = Dense(1024, name='fc1')(x)
-    #x = BatchNormalization()(x)
-    #x = Activation('relu')(x)
-    #x = Dense(512, name='fc2')(x)
-    #x = BatchNormalization()(x)
-    #x = Activation('relu')(x)
+    x = Dense(1024, name='fc1')(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = Dense(512, name='fc2')(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
     x = GlobalAveragePooling2D()(x)
     x = Dense(classes, activation='softmax', name='predictions')(x)
 
@@ -251,9 +251,15 @@ def MyCustomCNN(input_shape=None, classes=5):
     return model
 
 
-def get_dl_model(net, nb_class=3, use_pretrained=True, resume_from=None,
-                 top_layer_nb=None, weight_decay=.01,
-                 hidden_dropout=.0, **kw_args):
+def get_dl_model(net,
+                 nb_class=3,
+                 use_pretrained=True,
+                 resume_from=None,
+                 top_layer_nb=None,
+                 weight_decay=.01,
+                 hidden_dropout=.0,
+                 img_size=None,
+                 **kw_args):
     '''Load existing DL model or create it from new
     Args:
         kw_args: keyword arguments for creating resnet.
@@ -284,26 +290,29 @@ def get_dl_model(net, nb_class=3, use_pretrained=True, resume_from=None,
     weights = 'imagenet' if use_pretrained else None
 
     if resume_from is not None:
-        print("Loading existing model state.", end=' ')
+        print "Loading existing model state.",
         sys.stdout.flush()
         model = load_model(resume_from)
-        print("Done.")
+        print "Done."
     elif net == 'yaroslav':
         model = Yaroslav(classes=nb_class)
     elif net == 'custom':
         model = MyCustomCNN(classes=nb_class)
     else:
-        print("Loading %s," % (net), end=' ')
+        print "Loading %s," % (net),
         sys.stdout.flush()
-        base_model = NNet(weights=weights, include_top=False,
-                          input_shape=None, pooling='avg')
+        base_model = NNet(weights=weights,
+                          include_top=False,
+                          input_shape=None,
+                          pooling='avg')
         x = base_model.output
         if hidden_dropout > 0.:
             x = Dropout(hidden_dropout)(x)
-        preds = Dense(nb_class, activation='softmax',
+        preds = Dense(nb_class,
+                      activation='softmax',
                       kernel_regularizer=l2(weight_decay))(x)
         model = Model(input=base_model.input, output=preds)
-        print("Done.")
+        print "Done."
 
     return model, preprocess_input, top_layer_nb
 
@@ -327,29 +336,50 @@ def create_optimizer(optim_name, lr):
         raise Exception('Unknown optimizer name: ' + optim_name)
 
 
-def do_3stage_training(model, org_model, train_generator, validation_set,
-                       validation_steps, best_model_out, steps_per_epoch,
-                       top_layer_nb=None, net=None,
-                       nb_epoch=10, top_layer_epochs=0, all_layer_epochs=0,
-                       use_pretrained=True, optim='sgd', init_lr=.01,
-                       top_layer_multiplier=.01, all_layer_multiplier=.0001,
-                       es_patience=5, lr_patience=2, auto_batch_balance=True,
+def do_3stage_training(model,
+                       org_model,
+                       train_generator,
+                       validation_set,
+                       validation_steps,
+                       best_model_out,
+                       steps_per_epoch,
+                       top_layer_nb=None,
+                       net=None,
+                       nb_epoch=10,
+                       top_layer_epochs=0,
+                       all_layer_epochs=0,
+                       use_pretrained=True,
+                       optim='sgd',
+                       init_lr=.01,
+                       top_layer_multiplier=.01,
+                       all_layer_multiplier=.0001,
+                       es_patience=5,
+                       lr_patience=2,
+                       auto_batch_balance=True,
                        nb_class=3,
-                       pos_cls_weight=1., neg_cls_weight=1., nb_worker=1,
-                       weight_decay2=.01, hidden_dropout2=.0):
+                       pos_cls_weight=1.,
+                       neg_cls_weight=1.,
+                       nb_worker=1,
+                       weight_decay2=.01,
+                       hidden_dropout2=.0):
     '''3-stage DL model training
     '''
     # Create callbacks and class weight.
-    early_stopping = EarlyStopping(monitor='val_loss', patience=es_patience,
+    early_stopping = EarlyStopping(monitor='val_loss',
+                                   patience=es_patience,
                                    verbose=1)
     # best_model += ".{epoch:03d}-{val_acc:.2f}.h5"
-    checkpointer = ModelCheckpoint(best_model_out, monitor='val_acc', verbose=1,
+    checkpointer = ModelCheckpoint(best_model_out,
+                                   monitor='val_acc',
+                                   verbose=1,
                                    save_best_only=True)
     stdout_flush = DMFlush()
     callbacks = [early_stopping, checkpointer, stdout_flush]
     if optim == 'sgd':
-        reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.5,
-                                      patience=lr_patience, verbose=1)
+        reduce_lr = ReduceLROnPlateau(monitor='val_loss',
+                                      factor=0.5,
+                                      patience=lr_patience,
+                                      verbose=1)
         callbacks.append(reduce_lr)
     if auto_batch_balance:
         class_weight = None
@@ -365,28 +395,28 @@ def do_3stage_training(model, org_model, train_generator, validation_set,
         pickle_safe = True
 
     # Stage 1: train only the last dense layer if using pretrained model.
-    print("Start model training", end=' ')
+    print "Start model training",
     if use_pretrained:
-        print("on the last dense layer only")
+        print "on the last dense layer only"
         for layer in org_model.layers[:-1]:
             layer.trainable = False
     else:
-        print("on all layers")
+        print "on all layers"
     sys.stdout.flush()
     model.compile(optimizer=create_optimizer(optim, init_lr),
-                  loss='categorical_crossentropy', metrics=['accuracy'])
-    hist = model.fit_generator(
-        train_generator,
-        steps_per_epoch=steps_per_epoch,
-        epochs=nb_epoch,
-        class_weight=class_weight,
-        validation_data=validation_set,
-        validation_steps=validation_steps,
-        callbacks=callbacks,
-        nb_worker=nb_worker,
-        pickle_safe=pickle_safe,
-        verbose=2)
-    print("Done.")
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy'])
+    hist = model.fit_generator(train_generator,
+                               steps_per_epoch=steps_per_epoch,
+                               epochs=nb_epoch,
+                               class_weight=class_weight,
+                               validation_data=validation_set,
+                               validation_steps=validation_steps,
+                               callbacks=callbacks,
+                               nb_worker=nb_worker,
+                               pickle_safe=pickle_safe,
+                               verbose=2)
+    print "Done."
     try:
         loss_history = hist.history['val_loss']
         acc_history = hist.history['val_acc']
@@ -396,7 +426,7 @@ def do_3stage_training(model, org_model, train_generator, validation_set,
 
     # Stage 2: train only the top layers.
     if use_pretrained:
-        print("top layer nb =", top_layer_nb)
+        print "top layer nb =", top_layer_nb
         for layer in org_model.layers[top_layer_nb:]:
             layer.trainable = True
         # # adjust weight decay and dropout rate for those BN heavy models.
@@ -405,22 +435,24 @@ def do_3stage_training(model, org_model, train_generator, validation_set,
         dropout_layer = org_model.layers[-2]
         dense_layer.kernel_regularizer.l2 = weight_decay2
         dropout_layer.rate = hidden_dropout2
-        model.compile(optimizer=create_optimizer(optim, init_lr*top_layer_multiplier),
-                      loss='categorical_crossentropy', metrics=['accuracy'])
-        print("Start training on the top layers only")
+        model.compile(optimizer=create_optimizer(
+            optim, init_lr * top_layer_multiplier),
+                      loss='categorical_crossentropy',
+                      metrics=['accuracy'])
+        print "Start training on the top layers only"
         sys.stdout.flush()
-        hist = model.fit_generator(
-            train_generator,
-            steps_per_epoch=steps_per_epoch,
-            epochs=top_layer_epochs,
-            class_weight=class_weight,
-            validation_data=validation_set,
-            validation_steps=validation_steps,
-            callbacks=callbacks,
-            nb_worker=nb_worker,
-            pickle_safe=pickle_safe,
-            verbose=2, initial_epoch=len(loss_history))
-        print("Done.")
+        hist = model.fit_generator(train_generator,
+                                   steps_per_epoch=steps_per_epoch,
+                                   epochs=top_layer_epochs,
+                                   class_weight=class_weight,
+                                   validation_data=validation_set,
+                                   validation_steps=validation_steps,
+                                   callbacks=callbacks,
+                                   nb_worker=nb_worker,
+                                   pickle_safe=pickle_safe,
+                                   verbose=2,
+                                   initial_epoch=len(loss_history))
+        print "Done."
         try:
             loss_history = np.append(loss_history, hist.history['val_loss'])
             acc_history = np.append(acc_history, hist.history['val_acc'])
@@ -430,22 +462,24 @@ def do_3stage_training(model, org_model, train_generator, validation_set,
     # Stage 3: train all layers.
         for layer in org_model.layers[:top_layer_nb]:
             layer.trainable = True
-        model.compile(optimizer=create_optimizer(optim, init_lr*all_layer_multiplier),
-                      loss='categorical_crossentropy', metrics=['accuracy'])
-        print("Start training on all layers")
+        model.compile(optimizer=create_optimizer(
+            optim, init_lr * all_layer_multiplier),
+                      loss='categorical_crossentropy',
+                      metrics=['accuracy'])
+        print "Start training on all layers"
         sys.stdout.flush()
-        hist = model.fit_generator(
-            train_generator,
-            steps_per_epoch=steps_per_epoch,
-            epochs=all_layer_epochs,
-            class_weight=class_weight,
-            validation_data=validation_set,
-            validation_steps=validation_steps,
-            callbacks=callbacks,
-            nb_worker=nb_worker,
-            pickle_safe=pickle_safe,
-            verbose=2, initial_epoch=len(loss_history))
-        print("Done.")
+        hist = model.fit_generator(train_generator,
+                                   steps_per_epoch=steps_per_epoch,
+                                   epochs=all_layer_epochs,
+                                   class_weight=class_weight,
+                                   validation_data=validation_set,
+                                   validation_steps=validation_steps,
+                                   callbacks=callbacks,
+                                   nb_worker=nb_worker,
+                                   pickle_safe=pickle_safe,
+                                   verbose=2,
+                                   initial_epoch=len(loss_history))
+        print "Done."
         try:
             loss_history = np.append(loss_history, hist.history['val_loss'])
             acc_history = np.append(acc_history, hist.history['val_acc'])
@@ -454,34 +488,54 @@ def do_3stage_training(model, org_model, train_generator, validation_set,
     return model, loss_history, acc_history
 
 
-def do_2stage_training(model, org_model, train_generator, validation_set,
-                       validation_steps, best_model_out, steps_per_epoch,
-                       top_layer_nb=None, nb_epoch=10, all_layer_epochs=0,
-                       optim='sgd', init_lr=.01, all_layer_multiplier=.1,
-                       es_patience=5, lr_patience=2, auto_batch_balance=True,
+def do_2stage_training(model,
+                       org_model,
+                       train_generator,
+                       validation_set,
+                       validation_steps,
+                       best_model_out,
+                       steps_per_epoch,
+                       top_layer_nb=None,
+                       nb_epoch=10,
+                       all_layer_epochs=0,
+                       optim='sgd',
+                       init_lr=.01,
+                       all_layer_multiplier=.1,
+                       es_patience=5,
+                       lr_patience=2,
+                       auto_batch_balance=True,
                        nb_class=2,
-                       pos_cls_weight=1., neg_cls_weight=1., nb_worker=1,
+                       pos_cls_weight=1.,
+                       neg_cls_weight=1.,
+                       nb_worker=1,
                        auc_checkpointer=None,
-                       weight_decay=.0001, hidden_dropout=.0,
-                       weight_decay2=.0001, hidden_dropout2=.0):
+                       weight_decay=.0001,
+                       hidden_dropout=.0,
+                       weight_decay2=.0001,
+                       hidden_dropout2=.0):
     '''2-stage DL model training (for whole images)
     '''
     if top_layer_nb is None and nb_epoch > 0:
         raise Exception('top_layer_nb must be specified when nb_epoch > 0')
 
     # Create callbacks and class weight.
-    early_stopping = EarlyStopping(monitor='val_loss', patience=es_patience,
+    early_stopping = EarlyStopping(monitor='val_loss',
+                                   patience=es_patience,
                                    verbose=1)
     if auc_checkpointer is None:
-        checkpointer = ModelCheckpoint(
-            best_model_out, monitor='val_acc', verbose=1, save_best_only=True)
+        checkpointer = ModelCheckpoint(best_model_out,
+                                       monitor='val_acc',
+                                       verbose=1,
+                                       save_best_only=True)
     else:
         checkpointer = auc_checkpointer
     stdout_flush = DMFlush()
     callbacks = [early_stopping, checkpointer, stdout_flush]
     if optim == 'sgd':
-        reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.5,
-                                      patience=lr_patience, verbose=1)
+        reduce_lr = ReduceLROnPlateau(monitor='val_loss',
+                                      factor=0.5,
+                                      patience=lr_patience,
+                                      verbose=1)
         callbacks.append(reduce_lr)
     if auto_batch_balance:
         class_weight = None
@@ -497,7 +551,7 @@ def do_2stage_training(model, org_model, train_generator, validation_set,
         pickle_safe = True
 
     # Stage 1: train only the top layers.
-    print("Top layer nb =", top_layer_nb)
+    print "Top layer nb =", top_layer_nb
     # import pdb; pdb.set_trace()
     for layer in org_model.layers[:top_layer_nb]:
         layer.trainable = False
@@ -510,21 +564,21 @@ def do_2stage_training(model, org_model, train_generator, validation_set,
         elif isinstance(layer, Dropout):
             layer.rate = hidden_dropout
     model.compile(optimizer=create_optimizer(optim, init_lr),
-                  loss='categorical_crossentropy', metrics=['accuracy'])
-    print("Start training on the top layers only")
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy'])
+    print "Start training on the top layers only"
     sys.stdout.flush()
-    hist = model.fit_generator(
-        train_generator,
-        steps_per_epoch=steps_per_epoch,
-        epochs=nb_epoch,
-        class_weight=class_weight,
-        validation_data=validation_set,
-        validation_steps=validation_steps,
-        callbacks=callbacks,
-        nb_worker=nb_worker,
-        pickle_safe=pickle_safe,
-        verbose=2)
-    print("Done.")
+    hist = model.fit_generator(train_generator,
+                               steps_per_epoch=steps_per_epoch,
+                               epochs=nb_epoch,
+                               class_weight=class_weight,
+                               validation_data=validation_set,
+                               validation_steps=validation_steps,
+                               callbacks=callbacks,
+                               nb_worker=nb_worker,
+                               pickle_safe=pickle_safe,
+                               verbose=2)
+    print "Done."
     try:
         loss_history = hist.history['val_loss']
         acc_history = hist.history['val_acc']
@@ -543,22 +597,24 @@ def do_2stage_training(model, org_model, train_generator, validation_set,
                 pass
         elif isinstance(layer, Dropout):
             layer.rate = hidden_dropout2
-    model.compile(optimizer=create_optimizer(optim, init_lr*all_layer_multiplier),
-                  loss='categorical_crossentropy', metrics=['accuracy'])
-    print("Start training on all layers")
+    model.compile(optimizer=create_optimizer(optim,
+                                             init_lr * all_layer_multiplier),
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy'])
+    print "Start training on all layers"
     sys.stdout.flush()
-    hist = model.fit_generator(
-        train_generator,
-        steps_per_epoch=steps_per_epoch,
-        epochs=all_layer_epochs,
-        class_weight=class_weight,
-        validation_data=validation_set,
-        validation_steps=validation_steps,
-        callbacks=callbacks,
-        nb_worker=nb_worker,
-        pickle_safe=pickle_safe,
-        verbose=2, initial_epoch=len(loss_history))
-    print("Done.")
+    hist = model.fit_generator(train_generator,
+                               steps_per_epoch=steps_per_epoch,
+                               epochs=all_layer_epochs,
+                               class_weight=class_weight,
+                               validation_data=validation_set,
+                               validation_steps=validation_steps,
+                               callbacks=callbacks,
+                               nb_worker=nb_worker,
+                               pickle_safe=pickle_safe,
+                               verbose=2,
+                               initial_epoch=len(loss_history))
+    print "Done."
     try:
         loss_history = np.append(loss_history, hist.history['val_loss'])
         acc_history = np.append(acc_history, hist.history['val_acc'])
@@ -571,7 +627,6 @@ def do_2stage_training(model, org_model, train_generator, validation_set,
 class DMMetrics(object):
     '''Classification metrics for the DM challenge
     '''
-
     @staticmethod
     def sensitivity(y_true, y_pred):
         y_pred_pos = K.round(K.clip(y_pred, 0, 1))
@@ -594,8 +649,10 @@ class DMMetrics(object):
 class DMAucModelCheckpoint(Callback):
     '''Model checkpointer using AUROC score
     '''
-
-    def __init__(self, filepath, test_data, test_samples=None,
+    def __init__(self,
+                 filepath,
+                 test_data,
+                 test_samples=None,
                  batch_size=None):
         super(DMAucModelCheckpoint, self).__init__()
         self.filepath = filepath
@@ -614,8 +671,12 @@ class DMAucModelCheckpoint(Callback):
         self.best_all_auc = None
 
     @staticmethod
-    def calc_test_auc(test_set, model, batch_size=None, test_samples=None,
-                      return_y_res=False, test_augment=False):
+    def calc_test_auc(test_set,
+                      model,
+                      batch_size=None,
+                      test_samples=None,
+                      return_y_res=False,
+                      test_augment=False):
         '''Calculate the AUC score for a test set or generator given a model
         '''
         def augmented_predict(X, batch_size=None):
@@ -674,7 +735,9 @@ class DMAucModelCheckpoint(Callback):
         # Calculate AUC score.
         # import pdb; pdb.set_trace()
         try:
-            auc = roc_auc_score(y_true, y_pred, average=None,
+            auc = roc_auc_score(y_true,
+                                y_pred,
+                                average=None,
                                 sample_weight=weights)
         except ValueError:
             auc = .0
@@ -715,7 +778,8 @@ class DMAucModelCheckpoint(Callback):
         # else:
         #     raise Exception("Unknown auc format: " + str(auc))
         epoch_auc = np.mean(auc)
-        print(" - Epoch:%d, AUROC:%s, mean=%.4f" % (epoch + 1, str(auc), epoch_auc))
+        print " - Epoch:%d, AUROC:%s, mean=%.4f" % (epoch + 1, str(auc),
+                                                    epoch_auc)
         sys.stdout.flush()
         # epoch_auc = non_bkg_auc_pos if y_pred.shape[1] == 3 else auc
         if epoch_auc > self.best_auc:
@@ -727,18 +791,17 @@ class DMAucModelCheckpoint(Callback):
 
     def on_train_end(self, logs={}):
         if self.best_auc >= 0.:
-            print("\n>>> Found best AUROC: %.4f at epoch: %d, saved to: %s <<<" % \
-                (self.best_auc, self.best_epoch, self.filepath))
-            print(">>> AUROC for all cls:", str(self.best_all_auc), "<<<")
+            print "\n>>> Found best AUROC: %.4f at epoch: %d, saved to: %s <<<" % \
+                (self.best_auc, self.best_epoch, self.filepath)
+            print ">>> AUROC for all cls:", str(self.best_all_auc), "<<<"
         else:
-            print("\n>>> AUROC was not scored. No model was saved. <<<")
+            print "\n>>> AUROC was not scored. No model was saved. <<<"
         sys.stdout.flush()
 
 
 class DMFlush(Callback):
     '''A callback does nothing but flushes stdout after each epoch
     '''
-
     def __init__(self):
         super(DMFlush, self).__init__()
 

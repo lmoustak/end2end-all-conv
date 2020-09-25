@@ -274,7 +274,7 @@ class DMMetaManager(object):
             if nb_exam == 1:
                 yield (subj_id, 1, subj_dat.loc[1], None, None)
             else:
-                for prior_idx in range(1, nb_exam):
+                for prior_idx in xrange(1, nb_exam):
                     curr_idx = prior_idx + 1
                     yield (subj_id, curr_idx, subj_dat.loc[curr_idx], 
                            prior_idx, subj_dat.loc[prior_idx])
